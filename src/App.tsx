@@ -126,7 +126,8 @@ function normalizeGrade(value: string) {
 }
 
 function inferGradeFromMarks(total: number, scheme: Scheme) {
-  const bucket = scheme.markRanges.find((range) => total >= range.min)
+  const normalizedTotal = total > 100 ? total / 2 : total
+  const bucket = scheme.markRanges.find((range) => normalizedTotal >= range.min)
   return bucket?.grade ?? 'F'
 }
 
@@ -358,7 +359,7 @@ function App() {
           const updated = { ...sub, [field]: value }
           
           if (field === 'total') {
-            const val = Math.max(0, Math.min(100, Number(value) || 0))
+            const val = Math.max(0, Math.min(200, Number(value) || 0))
             updated.total = val
             updated.grade = inferGradeFromMarks(val, selectedScheme)
           }
@@ -731,7 +732,7 @@ function App() {
         if (idx !== index) return item
         const updated = { ...item, [field]: value }
         if (field === 'marks') {
-          const marksVal = Math.min(100, Math.max(0, Number(value) || 0))
+          const marksVal = Math.min(200, Math.max(0, Number(value) || 0))
           updated.marks = marksVal
           updated.grade = inferGradeFromMarks(marksVal, selectedScheme)
         }
@@ -1030,9 +1031,9 @@ function App() {
                         <input
                           type="number"
                           value={course.marks}
-                          onChange={(e) => handleManualCourseChange(index, 'marks', Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+                          onChange={(e) => handleManualCourseChange(index, 'marks', Math.max(0, Math.min(200, Number(e.target.value) || 0)))}
                           min="0"
-                          max="100"
+                          max="200"
                           className="marks-input"
                         />
                       </td>
@@ -1123,7 +1124,7 @@ function App() {
             {processedSemesters.map((result, index) => {
               const marksSubjects = result.subjects.filter(sub => typeof sub.total === 'number' && sub.total !== undefined);
               const totalObtained = marksSubjects.reduce((sum, s) => sum + (s.total || 0), 0);
-              const totalMax = marksSubjects.length * 100;
+              const totalMax = marksSubjects.reduce((sum, s) => sum + ((s.total && s.total > 100) ? 200 : 100), 0);
               const marksDisplay = marksSubjects.length > 0 ? `${totalObtained}/${totalMax}` : null;
 
               return (
@@ -1241,7 +1242,7 @@ function App() {
                                   value={subject.total ?? 0}
                                   onChange={(e) => updateSemesterSubject(index, subIdx, 'total', Number(e.target.value))}
                                   min="0"
-                                  max="100"
+                                  max="200"
                                   className="marks-input"
                                 />
                               </td>
