@@ -652,46 +652,157 @@ function App() {
   }
 
   return (
-    <main className="app-shell">
-      <div className="upload-note-banner">
-        <span className="banner-icon">⚠️</span>
-        <div className="banner-content">
-          <strong>Important Upload Guide:</strong> Please make sure to upload <strong>all semester marksheets at once</strong>, including any backlog/makeup/backup exam marksheets. This ensures correct SGPA recalculation and accurate overall CGPA tracking.
-        </div>
-      </div>
-
-      <section className="hero-panel">
-        <div className="hero-copy">
+    <main className="app-shell single-column-flow">
+      {/* 1. Highlighted Central Upload Card */}
+      <section className="central-upload-card">
+        <header className="card-header">
           <p className="eyebrow">VTU SGPA / CGPA Helper</p>
-          <h1>Build your VTU result calculator from marksheet text, HTML, or PDF output.</h1>
-          <p className="lede">
-            This utility parses semester subjects, applies the selected VTU grading scheme, 
-            and tracks both SGPA and CGPA. It supports PDF uploads and manual entry.
-          </p>
-        </div>
-        <div className="metric-grid">
-          <article className="metric-card">
-            <span>Semesters Saved</span>
-            <strong>{semesters.length}</strong>
-          </article>
-          <article className="metric-card">
-            <span>Current CGPA</span>
-            <strong>{formatGpa(cgpa)}</strong>
-          </article>
-          <article className="metric-card">
-            <span>Scheme</span>
-            <strong>{selectedScheme.label}</strong>
-          </article>
-        </div>
-      </section>
+          <h1>Upload your VTU Marksheets</h1>
+          <p className="status-label">{status}</p>
+        </header>
 
-      <section className="workspace">
-        <div className="panel">
-          <div className="panel-head">
-            <h2>Input Panel</h2>
-            <p className="status-label">{status}</p>
+        <p className="upload-note-text">
+          ⚠️ <strong>Note:</strong> Please make sure to upload <strong>all semester marksheets at once</strong>, including any backlog/makeup/backup exam marksheets. This ensures correct SGPA recalculation and accurate overall CGPA tracking.
+        </p>
+
+        <div className="upload-actions-wrapper">
+          <label className="upload-button highlight-upload-btn">
+            Upload PDF / text files
+            <input
+              type="file"
+              multiple
+              accept=".txt,.html,.htm,.csv,.pdf,application/pdf"
+              onChange={handleFileUpload}
+            />
+          </label>
+
+          <button 
+            type="button" 
+            className={`btn-secondary ${showManualEntry ? 'active' : ''}`}
+            onClick={() => setShowManualEntry((current) => !current)}
+          >
+            {showManualEntry ? 'Close Manual Entry' : 'Or enter manually'}
+          </button>
+        </div>
+
+        {showManualEntry && (
+          <div className="manual-entry">
+            <h3>Enter Semester Results Manually</h3>
+            
+            <div className="manual-entry-meta">
+              <label className="field inline">
+                <span>Semester</span>
+                <select value={manualSemNum} onChange={(e) => {
+                  const sem = Number(e.target.value);
+                  setManualSemNum(sem);
+                  setManualSourceName(`Semester ${sem} Manual Entry`);
+                }}>
+                  {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
+                    <option key={s} value={s}>
+                      Semester {s}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              
+              <label className="field inline">
+                <span>Semester Label</span>
+                <input
+                  type="text"
+                  value={manualSourceName}
+                  onChange={(e) => setManualSourceName(e.target.value)}
+                  placeholder="e.g. Semester 3"
+                />
+              </label>
+            </div>
+
+            <div className="manual-entry-table-wrapper">
+              <table className="manual-entry-table">
+                <thead>
+                  <tr>
+                    <th>Course Code *</th>
+                    <th>Course Name</th>
+                    <th>Credits *</th>
+                    <th>Grade *</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {manualCourses.map((course, index) => (
+                    <tr key={index}>
+                      <td>
+                        <input
+                          type="text"
+                          value={course.code}
+                          onChange={(e) => handleManualCourseChange(index, 'code', e.target.value)}
+                          placeholder="e.g. 22CS31"
+                          className="code-input"
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          value={course.name}
+                          onChange={(e) => handleManualCourseChange(index, 'name', e.target.value)}
+                          placeholder="Data Structures"
+                          className="name-input"
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          value={course.credits}
+                          onChange={(e) => handleManualCourseChange(index, 'credits', Math.max(1, Number(e.target.value) || 1))}
+                          min="1"
+                          max="10"
+                          className="credits-input"
+                        />
+                      </td>
+                      <td>
+                        <select
+                          value={Object.keys(selectedScheme.gradePoints).includes(course.grade) ? course.grade : defaultGradeForSelectedScheme}
+                          onChange={(e) => handleManualCourseChange(index, 'grade', e.target.value)}
+                          className="grade-select"
+                        >
+                          {Object.keys(selectedScheme.gradePoints).map((g) => (
+                            <option key={g} value={g}>
+                              {g}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="delete-row-btn"
+                          onClick={() => removeManualCourseRow(index)}
+                        >
+                          ×
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="manual-entry-actions">
+              <button type="button" className="add-row-btn" onClick={addManualCourseRow}>
+                + Add Subject Row
+              </button>
+              <div className="manual-entry-submit-group">
+                <button type="button" className="btn-cancel" onClick={() => setShowManualEntry(false)}>
+                  Cancel
+                </button>
+                <button type="button" className="btn-save" onClick={saveManualSemester}>
+                  Save Semester
+                </button>
+              </div>
+            </div>
           </div>
+        )}
 
+        <div className="card-settings-grid">
           <label className="field">
             <span>VTU Grading Scheme</span>
             <select value={selectedSchemeId} onChange={(event) => setSelectedSchemeId(event.target.value)}>
@@ -707,8 +818,8 @@ function App() {
           <label className="field">
             <span>CGPA / Backlog Rule</span>
             <select value={cgpaMode} onChange={(event) => setCgpaMode(event.target.value as CgpaMode)}>
-              <option value="annexure-backlog">Appendix I backlog example (cleared credits only)</option>
-              <option value="regulation-formula">Regulation formula text (all registered credits)</option>
+              <option value="annexure-backlog">Appendix I backlog (cleared credits only)</option>
+              <option value="regulation-formula">Regulation formula (all registered credits)</option>
             </select>
             <small>
               {cgpaMode === 'annexure-backlog'
@@ -716,368 +827,273 @@ function App() {
                 : 'Regulation formula mode: Use total registered credits (including failed courses) in the CGPA denominator.'}
             </small>
           </label>
+        </div>
+      </section>
 
-          <div className="field">
-            <span>Final Year Track Eligibility Tracker</span>
-            <div className="track-selector">
-              <button 
-                type="button" 
-                className={`track-tab-btn ${schemeTrack === 'A' ? 'active' : ''}`}
-                onClick={() => setSchemeTrack('A')}
-              >
-                Scheme A (Regular Track)
-              </button>
-              <button 
-                type="button" 
-                className={`track-tab-btn ${schemeTrack === 'B' ? 'active' : ''}`}
-                onClick={() => setSchemeTrack('B')}
-              >
-                Scheme B (One-Year Internship)
-              </button>
-            </div>
-            
-            <div className={`eligibility-status-box ${
-              schemeTrack === 'A'
-                ? (eligibility.schemeA.eligible ? 'eligible' : 'ineligible')
-                : (eligibility.schemeB.eligible ? 'eligible' : 'ineligible')
-            }`}>
-              <div className="eligibility-status-head">
-                <span className="status-indicator"></span>
-                <strong>
-                  {schemeTrack === 'A' ? 'Scheme A Status' : 'Scheme B Status'}:{' '}
-                  {schemeTrack === 'A'
-                    ? (eligibility.schemeA.eligible ? 'Eligible' : 'Not Eligible Yet')
-                    : (eligibility.schemeB.eligible ? 'Eligible' : 'Not Eligible Yet')}
-                </strong>
-              </div>
-              <ul className="eligibility-list">
-                {schemeTrack === 'A' ? (
-                  eligibility.schemeA.reasons.length > 0 ? (
-                    eligibility.schemeA.reasons.map((reason, i) => <li key={i} className="requirement-failed">✗ {reason}</li>)
-                  ) : (
-                    <li className="requirement-passed">✓ All Semester 1 & 2 courses cleared. Ready for Scheme A.</li>
-                  )
-                ) : (
-                  eligibility.schemeB.reasons.length > 0 ? (
-                    eligibility.schemeB.reasons.map((reason, i) => <li key={i} className="requirement-failed">✗ {reason}</li>)
-                  ) : (
-                    <>
-                      <li className="requirement-passed">✓ No backlogs in Semesters 1 to 4 (passed all on first attempt).</li>
-                      <li className="requirement-passed">✓ CGPA is 6.00 or above at the time of admission to 5th semester.</li>
-                    </>
-                  )
-                )}
-              </ul>
-              <small className="eligibility-footer-info">
-                {schemeTrack === 'A'
-                  ? 'Criteria: Students must clear all subjects from 1st and 2nd semesters.'
-                  : 'Criteria: Stricter Nep-2020 track. Zero backlogs from 1st to 4th semesters (first attempt pass only) and CGPA ≥ 6.00.'}
-              </small>
-            </div>
+      {/* 2. RCGPA Card & Total Sem Sheets Uploaded Card */}
+      <section className="results-metrics-grid">
+        <article className="result-metric-card highlighted-metric">
+          <div className="metric-header">
+            <span>Overall CGPA (RCGPA)</span>
+            <span className="info-tag">Backlog Cleared</span>
           </div>
+          <strong>{formatGpa(cgpa)}</strong>
+          <small>Recalculated based on best subject attempts</small>
+        </article>
 
-          <div className="actions">
-            <button type="button" className="btn-primary" onClick={() => setShowManualEntry((current) => !current)}>
-              {showManualEntry ? 'Close Manual Entry' : 'Enter manually'}
-            </button>
-            <label className="upload-button">
-              Upload PDF / text files
-              <input
-                type="file"
-                multiple
-                accept=".txt,.html,.htm,.csv,.pdf,application/pdf"
-                onChange={handleFileUpload}
-              />
-            </label>
+        <article className="result-metric-card">
+          <div className="metric-header">
+            <span>Total Semester Sheets Uploaded</span>
+            <span className="info-tag">Active</span>
           </div>
+          <strong>{semesters.length}</strong>
+          <small>{semesters.length === 1 ? '1 sheet' : `${semesters.length} sheets`} imported</small>
+        </article>
+      </section>
 
-          {showManualEntry ? (
-            <div className="manual-entry">
-              <h3>Enter Semester Results Manually</h3>
-              
-              <div className="manual-entry-meta">
-                <label className="field inline">
-                  <span>Semester</span>
-                  <select value={manualSemNum} onChange={(e) => {
-                    const sem = Number(e.target.value);
-                    setManualSemNum(sem);
-                    setManualSourceName(`Semester ${sem} Manual Entry`);
-                  }}>
-                    {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
-                      <option key={s} value={s}>
-                        Semester {s}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                
-                <label className="field inline">
-                  <span>Semester Label</span>
-                  <input
-                    type="text"
-                    value={manualSourceName}
-                    onChange={(e) => setManualSourceName(e.target.value)}
-                    placeholder="e.g. Semester 3"
-                  />
-                </label>
-              </div>
+      {/* 3. Each Semester Result Sheet with SGPA */}
+      <section className="semesters-container-panel">
+        <div className="panel-head-centered">
+          <h2>Semester Results</h2>
+          <p>Each imported sheet contributes automatically to the overall CGPA.</p>
+        </div>
 
-              <div className="manual-entry-table-wrapper">
-                <table className="manual-entry-table">
-                  <thead>
-                    <tr>
-                      <th>Course Code *</th>
-                      <th>Course Name</th>
-                      <th>Credits *</th>
-                      <th>Grade *</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {manualCourses.map((course, index) => (
-                      <tr key={index}>
-                        <td>
-                          <input
-                            type="text"
-                            value={course.code}
-                            onChange={(e) => handleManualCourseChange(index, 'code', e.target.value)}
-                            placeholder="e.g. 22CS31"
-                            className="code-input"
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            value={course.name}
-                            onChange={(e) => handleManualCourseChange(index, 'name', e.target.value)}
-                            placeholder="Data Structures"
-                            className="name-input"
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            value={course.credits}
-                            onChange={(e) => handleManualCourseChange(index, 'credits', Math.max(1, Number(e.target.value) || 1))}
-                            min="1"
-                            max="10"
-                            className="credits-input"
-                          />
-                        </td>
-                        <td>
-                          <select
-                            value={Object.keys(selectedScheme.gradePoints).includes(course.grade) ? course.grade : defaultGradeForSelectedScheme}
-                            onChange={(e) => handleManualCourseChange(index, 'grade', e.target.value)}
-                            className="grade-select"
-                          >
-                            {Object.keys(selectedScheme.gradePoints).map((g) => (
-                              <option key={g} value={g}>
-                                {g}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            className="delete-row-btn"
-                            onClick={() => removeManualCourseRow(index)}
-                          >
-                            ×
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="manual-entry-actions">
-                <button type="button" className="add-row-btn" onClick={addManualCourseRow}>
-                  + Add Subject Row
-                </button>
-                <div className="manual-entry-submit-group">
-                  <button type="button" className="btn-cancel" onClick={() => setShowManualEntry(false)}>
-                    Cancel
-                  </button>
-                  <button type="button" className="btn-save" onClick={saveManualSemester}>
-                    Save Semester
-                  </button>
+        {processedSemesters.length === 0 ? (
+          <div className="empty-state-centered">No semesters imported yet. Please use the upload card above.</div>
+        ) : (
+          <div className="semester-stack">
+            {processedSemesters.map((result, index) => (
+              <article key={`${result.sourceName}-${index}`} className="semester-card">
+                <div className="semester-head">
+                  <div>
+                    <p className="semester-tag">Semester {result.semester ?? 'Unknown'}</p>
+                    <h3>{result.sourceName}</h3>
+                  </div>
+                  {result.recalculatedSgpa !== null ? (
+                    <div className="sgpa-pill-group">
+                      <span className="sgpa-pill original strikes">SGPA {formatGpa(result.sgpa)}</span>
+                      <span className="sgpa-pill recalculated">Recalculated: {formatGpa(result.recalculatedSgpa)}</span>
+                    </div>
+                  ) : (
+                    <div className="sgpa-pill">SGPA {formatGpa(result.sgpa)}</div>
+                  )}
                 </div>
-              </div>
-            </div>
-          ) : null}
 
-          <div className="rules-box">
-            <h3>How SGPA and CGPA are Calculated</h3>
-            
-            <div className="formula-section">
-              <h4>1. Semester Grade Point Average (SGPA)</h4>
-              <div className="formula-display">
-                SGPA = Σ (Ci × Gi) / Σ Ci
-              </div>
-              <p>
-                Where <strong>Ci</strong> represents the course credits and <strong>Gi</strong> represents the grade points secured by the student in that course.
-              </p>
-              <p className="backlog-note-text">
-                <strong>Backlog Rules in SGPA:</strong> Under the VTU 2022 CBCS regulations, courses with failed grades (F/ABS) are still included in the SGPA denominator (credits registered) in the semester they are attempted. Once re-registered and cleared, they contribute to the SGPA of the semester in which they are successfully cleared.
-              </p>
-            </div>
+                <div className="calc-summary">
+                  <span>Total credits: {result.totalCredits}</span>
+                  <span>Earned credits: {result.earnedCredits}</span>
+                  <span>CGPA credits used: {cgpaMode === 'annexure-backlog' ? result.cgpaCredits : result.totalCredits}</span>
+                  <span>Method: sum(credit x grade point) / {result.totalCredits || '--'}</span>
+                </div>
 
-            <div className="formula-section">
-              <h4>2. Cumulative Grade Point Average (CGPA)</h4>
-              <div className="formula-display">
-                CGPA = Σ (Ci × Si) / Σ Ci
-              </div>
-              <p>
-                Where <strong>Si</strong> represents the SGPA of semester <strong>i</strong> and <strong>Ci</strong> represents the total credits considered for that semester.
-              </p>
-              <p>
-                <strong>Calculation Method Selector:</strong>
-              </p>
-              <ul>
-                <li>
-                  <strong>Appendix I (Backlog-Exclusion) Mode:</strong> Under the Appendix I backlog worked example, F-grade credits are temporarily excluded from the CGPA denominator until cleared. This prevents failed courses from lowering the CGPA divisor before they are passed.
-                </li>
-                <li>
-                  <strong>Regulation Formula Mode:</strong> Strictly follows the general formula text using all registered credits in the divisor, including failed ones.
-                </li>
-              </ul>
-            </div>
-
-            <div className="formula-section">
-              <h4>3. Active Grading Scale ({selectedScheme.label})</h4>
-              <div className="table-responsive">
-                <table className="mini-table">
-                  <thead>
-                    <tr>
-                      <th>Grade</th>
-                      {Object.keys(selectedScheme.gradePoints).map((g) => (
-                        <th key={g}>{g}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td>Points</td>
-                      {Object.values(selectedScheme.gradePoints).map((pt, i) => (
-                        <td key={i}>{pt}</td>
-                      ))}
-                    </tr>
-                    {selectedScheme.markRanges && (
+                <div className="table-wrapper">
+                  <table>
+                    <thead>
                       <tr>
-                        <td>Marks</td>
-                        {selectedScheme.markRanges.map((range, i) => (
-                          <td key={i}>{range.min}%+</td>
-                        ))}
+                        <th>Code</th>
+                        <th>Subject</th>
+                        <th>Total</th>
+                        <th>Credits</th>
+                        <th>Grade</th>
                       </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                    </thead>
+                    <tbody>
+                      {result.subjectsWithRecalc.map((subject) => (
+                        <tr key={subject.code} className={subject.isRecalculated ? 'recalculated-row' : ''}>
+                          <td>{subject.code}</td>
+                          <td>{subject.name}</td>
+                          <td>{subject.total ?? '--'}</td>
+                          <td>{subject.credits}</td>
+                          <td className="grade-cell">
+                            {subject.isRecalculated ? (
+                              <>
+                                <span className="original-grade strikes">{subject.grade}</span>
+                                <span className="arrow-sep"> ➔ </span>
+                                <span className="new-grade">{subject.recalculatedGrade}</span>
+                              </>
+                            ) : (
+                              subject.grade
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
-            <div className="formula-section">
-              <h4>4. Credit Allocation Rules (PDF Upload)</h4>
-              <p>When you upload official VTU result sheets, course credits are inferred automatically based on the following pattern rules:</p>
-              <ul>
-                <li>Laboratory / Practical Courses: <strong>1 Credit</strong></li>
-                <li>Project Work / Phase: <strong>2 Credits</strong></li>
-                <li>Constitution, Intellectual Property, PE, or IKS: <strong>1 Credit</strong></li>
-                <li>All Professional Core / Theory Courses: <strong>3 Credits</strong></li>
-              </ul>
+                {result.recalculations.length > 0 && (
+                  <div className="recalc-comments-box">
+                    {result.recalculations.map((recalc) => (
+                      <div key={recalc.code} className="recalc-comment">
+                        💡 <strong>{recalc.code}</strong> recalculated based on you passed it in {recalc.passedSem}{getOrdinalSuffix(recalc.passedSem)} sem
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* 4. Final Year Track Eligibility Tracker Card */}
+      <section className="eligibility-card-panel">
+        <div className="panel-head-centered">
+          <h2>Final Year Track Eligibility</h2>
+          <p>Status tracking for VTU NEP tracks (Scheme A and Scheme B).</p>
+        </div>
+
+        <div className="eligibility-content-card">
+          <div className="track-selector">
+            <button 
+              type="button" 
+              className={`track-tab-btn ${schemeTrack === 'A' ? 'active' : ''}`}
+              onClick={() => setSchemeTrack('A')}
+            >
+              Scheme A (Regular Track)
+            </button>
+            <button 
+              type="button" 
+              className={`track-tab-btn ${schemeTrack === 'B' ? 'active' : ''}`}
+              onClick={() => setSchemeTrack('B')}
+            >
+              Scheme B (One-Year Internship)
+            </button>
+          </div>
+          
+          <div className={`eligibility-status-box ${
+            schemeTrack === 'A'
+              ? (eligibility.schemeA.eligible ? 'eligible' : 'ineligible')
+              : (eligibility.schemeB.eligible ? 'eligible' : 'ineligible')
+          }`}>
+            <div className="eligibility-status-head">
+              <span className="status-indicator"></span>
+              <strong>
+                {schemeTrack === 'A' ? 'Scheme A Status' : 'Scheme B Status'}:{' '}
+                {schemeTrack === 'A'
+                  ? (eligibility.schemeA.eligible ? 'Eligible' : 'Not Eligible Yet')
+                  : (eligibility.schemeB.eligible ? 'Eligible' : 'Not Eligible Yet')}
+              </strong>
+            </div>
+            <ul className="eligibility-list">
+              {schemeTrack === 'A' ? (
+                eligibility.schemeA.reasons.length > 0 ? (
+                  eligibility.schemeA.reasons.map((reason, i) => <li key={i} className="requirement-failed">✗ {reason}</li>)
+                ) : (
+                  <li className="requirement-passed">✓ All Semester 1 & 2 courses cleared. Ready for Scheme A.</li>
+                )
+              ) : (
+                eligibility.schemeB.reasons.length > 0 ? (
+                  eligibility.schemeB.reasons.map((reason, i) => <li key={i} className="requirement-failed">✗ {reason}</li>)
+                ) : (
+                  <>
+                    <li className="requirement-passed">✓ No backlogs in Semesters 1 to 4 (passed all on first attempt).</li>
+                    <li className="requirement-passed">✓ CGPA is 6.000 or above at the time of admission to 5th semester.</li>
+                  </>
+                )
+              )}
+            </ul>
+            <small className="eligibility-footer-info">
+              {schemeTrack === 'A'
+                ? 'Criteria: Students must clear all subjects from 1st and 2nd semesters.'
+                : 'Criteria: Stricter Nep-2020 track. Zero backlogs from 1st to 4th semesters (first attempt pass only) and CGPA ≥ 6.000.'}
+            </small>
+          </div>
+        </div>
+      </section>
+
+      {/* 5. Rules & Calculations Box */}
+      <section className="rules-card-panel">
+        <div className="panel-head-centered">
+          <h2>Calculation Rules</h2>
+          <p>Official Visvesvaraya Technological University (VTU) guidelines.</p>
+        </div>
+
+        <div className="rules-box">
+          <h3>How SGPA and CGPA are Calculated</h3>
+          
+          <div className="formula-section">
+            <h4>1. Semester Grade Point Average (SGPA)</h4>
+            <div className="formula-display">
+              SGPA = Σ (Ci × Gi) / Σ Ci
+            </div>
+            <p>
+              Where <strong>Ci</strong> represents the course credits and <strong>Gi</strong> represents the grade points secured by the student in that course.
+            </p>
+            <p className="backlog-note-text">
+              <strong>Backlog Rules in SGPA:</strong> Under the VTU 2022 CBCS regulations, courses with failed grades (F/ABS) are still included in the SGPA denominator (credits registered) in the semester they are attempted. Once re-registered and cleared, they contribute to the SGPA of the semester in which they are successfully cleared.
+            </p>
+          </div>
+
+          <div className="formula-section">
+            <h4>2. Cumulative Grade Point Average (CGPA)</h4>
+            <div className="formula-display">
+              CGPA = Σ (Ci × Si) / Σ Ci
+            </div>
+            <p>
+              Where <strong>Si</strong> represents the SGPA of semester <strong>i</strong> and <strong>Ci</strong> represents the total credits considered for that semester.
+            </p>
+            <p>
+              <strong>Calculation Method Selector:</strong>
+            </p>
+            <ul>
+              <li>
+                <strong>Appendix I (Backlog-Exclusion) Mode:</strong> Under the Appendix I backlog worked example, F-grade credits are temporarily excluded from the CGPA denominator until cleared. This prevents failed courses from lowering the CGPA divisor before they are passed.
+              </li>
+              <li>
+                <strong>Regulation Formula Mode:</strong> Strictly follows the general formula text using all registered credits in the divisor, including failed ones.
+              </li>
+            </ul>
+          </div>
+
+          <div className="formula-section">
+            <h4>3. Active Grading Scale ({selectedScheme.label})</h4>
+            <div className="table-responsive">
+              <table className="mini-table">
+                <thead>
+                  <tr>
+                    <th>Grade</th>
+                    {Object.keys(selectedScheme.gradePoints).map((g) => (
+                      <th key={g}>{g}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Points</td>
+                    {Object.values(selectedScheme.gradePoints).map((pt, i) => (
+                      <td key={i}>{pt}</td>
+                    ))}
+                  </tr>
+                  {selectedScheme.markRanges && (
+                    <tr>
+                      <td>Marks</td>
+                      {selectedScheme.markRanges.map((range, i) => (
+                        <td key={i}>{range.min}%+</td>
+                      ))}
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
 
-          <div className="hint-box">
-            <h3>Usage Instructions</h3>
-            <p>You can upload multiple VTU marksheets or PDF files at once. All semester SGPAs and overall CGPAs will update automatically.</p>
-            <p>For PDFs, the app parses the layout structure and infers grades and credits. You can inspect each semester's subjects in the right panel.</p>
+          <div className="formula-section">
+            <h4>4. Credit Allocation Rules (PDF Upload)</h4>
+            <p>When you upload official VTU result sheets, course credits are inferred automatically based on the following pattern rules:</p>
+            <ul>
+              <li>Laboratory / Practical Courses: <strong>1 Credit</strong></li>
+              <li>Project Work / Phase: <strong>2 Credits</strong></li>
+              <li>Constitution, Intellectual Property, PE, or IKS: <strong>1 Credit</strong></li>
+              <li>All Professional Core / Theory Courses: <strong>3 Credits</strong></li>
+            </ul>
           </div>
         </div>
 
-        <div className="panel">
-          <div className="panel-head">
-            <h2>Semesters</h2>
-            <p>Each imported semester contributes automatically to CGPA.</p>
-          </div>
-
-          {processedSemesters.length === 0 ? (
-            <div className="empty-state">No semesters imported yet.</div>
-          ) : (
-            <div className="semester-stack">
-              {processedSemesters.map((result, index) => (
-                <article key={`${result.sourceName}-${index}`} className="semester-card">
-                  <div className="semester-head">
-                    <div>
-                      <p className="semester-tag">Semester {result.semester ?? 'Unknown'}</p>
-                      <h3>{result.sourceName}</h3>
-                    </div>
-                    {result.recalculatedSgpa !== null ? (
-                      <div className="sgpa-pill-group">
-                        <span className="sgpa-pill original strikes">SGPA {formatGpa(result.sgpa)}</span>
-                        <span className="sgpa-pill recalculated">Recalculated: {formatGpa(result.recalculatedSgpa)}</span>
-                      </div>
-                    ) : (
-                      <div className="sgpa-pill">SGPA {formatGpa(result.sgpa)}</div>
-                    )}
-                  </div>
-
-                  <div className="calc-summary">
-                    <span>Total credits: {result.totalCredits}</span>
-                    <span>Earned credits: {result.earnedCredits}</span>
-                    <span>CGPA credits used: {cgpaMode === 'annexure-backlog' ? result.cgpaCredits : result.totalCredits}</span>
-                    <span>Method: sum(credit x grade point) / {result.totalCredits || '--'}</span>
-                  </div>
-
-                  <div className="table-wrapper">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Code</th>
-                          <th>Subject</th>
-                          <th>Total</th>
-                          <th>Credits</th>
-                          <th>Grade</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {result.subjectsWithRecalc.map((subject) => (
-                          <tr key={subject.code} className={subject.isRecalculated ? 'recalculated-row' : ''}>
-                            <td>{subject.code}</td>
-                            <td>{subject.name}</td>
-                            <td>{subject.total ?? '--'}</td>
-                            <td>{subject.credits}</td>
-                            <td className="grade-cell">
-                              {subject.isRecalculated ? (
-                                <>
-                                  <span className="original-grade strikes">{subject.grade}</span>
-                                  <span className="arrow-sep"> ➔ </span>
-                                  <span className="new-grade">{subject.recalculatedGrade}</span>
-                                </>
-                              ) : (
-                                subject.grade
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {result.recalculations.length > 0 && (
-                    <div className="recalc-comments-box">
-                      {result.recalculations.map((recalc) => (
-                        <div key={recalc.code} className="recalc-comment">
-                          💡 <strong>{recalc.code}</strong> recalculated based on you passed it in {recalc.passedSem}{getOrdinalSuffix(recalc.passedSem)} sem
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </article>
-              ))}
-            </div>
-          )}
+        <div className="hint-box">
+          <h3>Usage Instructions</h3>
+          <p>You can upload multiple VTU marksheets or PDF files at once. All semester SGPAs and overall CGPAs will update automatically.</p>
+          <p>For PDFs, the app parses the layout structure and infers grades and credits. You can inspect each semester's subjects in the right panel.</p>
         </div>
       </section>
 
