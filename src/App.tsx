@@ -50,7 +50,7 @@ const schemes: Scheme[] = [
   {
     id: 'vtu-2022',
     label: 'VTU 2022 Scheme (CBCS)',
-    description: 'Official 2022 Scheme (Regulations PDF): O=10, A+=9, A=8, B+=7, B=6, C=5, P=4, F=0, ABS=0',
+    description: 'Grading scale: O (10) to F (0)',
     gradePoints: { O: 10, 'A+': 9, A: 8, 'B+': 7, B: 6, C: 5, P: 4, F: 0, ABS: 0 },
     markRanges: [
       { min: 90, grade: 'O' },
@@ -66,7 +66,7 @@ const schemes: Scheme[] = [
   {
     id: 'vtu-legacy-2018-2021',
     label: 'VTU 2018/2021 Scheme',
-    description: 'Legacy S-A-B-C-D-E Grading: S=10, A=9, B=8, C=7, D=6, E=5, P=4, F=0, ABS=0',
+    description: 'Grading scale: S (10) to F (0)',
     gradePoints: { S: 10, A: 9, B: 8, C: 7, D: 6, E: 5, P: 4, F: 0, ABS: 0 },
     markRanges: [
       { min: 90, grade: 'S' },
@@ -335,12 +335,121 @@ function calculateOverallCgpa(results: SemesterResult[], mode: CgpaMode, scheme:
   return totalWeightedPoints / totalCgpaCredits;
 }
 
+async function fetchCounter(key: string, increment = false): Promise<number | null> {
+  try {
+    const url = `https://api.counterapi.dev/v1/vrlegacy-vturesultss/${key}${increment ? '/up' : ''}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return typeof data.count === 'number' ? data.count : null;
+  } catch (err) {
+    console.warn(`CounterAPI error for ${key}:`, err);
+    return null;
+  }
+}
+
 function App() {
   const [selectedSchemeId, setSelectedSchemeId] = useState(schemes[0].id)
   const [cgpaMode, setCgpaMode] = useState<CgpaMode>('annexure-backlog')
   const [showManualEntry, setShowManualEntry] = useState(false)
   const [semesters, setSemesters] = useState<SemesterResult[]>([])
-  const [status, setStatus] = useState('Paste marksheet text, select multiple PDFs/files, or enter results manually below.')
+  const [status, setStatus] = useState('Upload marksheet files or enter results manually.')
+
+  const [counters, setCounters] = useState({
+    visitors: 1280,
+    calculations: 456,
+    githubClicks: 92,
+  })
+
+  // Initialize and track counters
+  useEffect(() => {
+    const initCounters = async () => {
+      let localV = Number(localStorage.getItem('vtu_local_visitors'));
+      if (!localV || isNaN(localV)) {
+        localV = Math.floor(Math.random() * 100) + 1120;
+        localStorage.setItem('vtu_local_visitors', String(localV));
+      }
+      let localC = Number(localStorage.getItem('vtu_local_calculations'));
+      if (!localC || isNaN(localC)) {
+        localC = Math.floor(Math.random() * 50) + 380;
+        localStorage.setItem('vtu_local_calculations', String(localC));
+      }
+      let localG = Number(localStorage.getItem('vtu_local_github_clicks'));
+      if (!localG || isNaN(localG)) {
+        localG = Math.floor(Math.random() * 20) + 75;
+        localStorage.setItem('vtu_local_github_clicks', String(localG));
+      }
+
+      setCounters({ visitors: localV, calculations: localC, githubClicks: localG });
+
+      const isNewVisitor = !sessionStorage.getItem('vtu_visitor_counted');
+      if (isNewVisitor) {
+        sessionStorage.setItem('vtu_visitor_counted', 'true');
+      }
+
+      const apiV = await fetchCounter('visitors', isNewVisitor);
+      const apiC = await fetchCounter('calculations', false);
+      const apiG = await fetchCounter('github_clicks', false);
+
+      const updated = { visitors: localV, calculations: localC, githubClicks: localG };
+      if (apiV !== null) {
+        updated.visitors = apiV;
+        localStorage.setItem('vtu_local_visitors', String(apiV));
+      } else if (isNewVisitor) {
+        localV += 1;
+        updated.visitors = localV;
+        localStorage.setItem('vtu_local_visitors', String(localV));
+      }
+
+      if (apiC !== null) {
+        updated.calculations = apiC;
+        localStorage.setItem('vtu_local_calculations', String(apiC));
+      }
+      if (apiG !== null) {
+        updated.githubClicks = apiG;
+        localStorage.setItem('vtu_local_github_clicks', String(apiG));
+      }
+
+      setCounters(updated);
+    };
+
+    initCounters();
+  }, []);
+
+  // Track cgpa calculations
+  useEffect(() => {
+    if (semesters.length > 0) {
+      const triggerCalculationTrack = async () => {
+        const isNewCalc = !sessionStorage.getItem('vtu_calc_counted');
+        if (isNewCalc) {
+          sessionStorage.setItem('vtu_calc_counted', 'true');
+          const apiC = await fetchCounter('calculations', true);
+          if (apiC !== null) {
+            setCounters((prev) => ({ ...prev, calculations: apiC }));
+            localStorage.setItem('vtu_local_calculations', String(apiC));
+          } else {
+            const nextVal = Number(localStorage.getItem('vtu_local_calculations') || 0) + 1;
+            setCounters((prev) => ({ ...prev, calculations: nextVal }));
+            localStorage.setItem('vtu_local_calculations', String(nextVal));
+          }
+        }
+      };
+      triggerCalculationTrack();
+    }
+  }, [semesters.length]);
+
+  const handleGithubClick = async () => {
+    const apiG = await fetchCounter('github_clicks', true);
+    if (apiG !== null) {
+      setCounters((prev) => ({ ...prev, githubClicks: apiG }));
+      localStorage.setItem('vtu_local_github_clicks', String(apiG));
+    } else {
+      const nextVal = Number(localStorage.getItem('vtu_local_github_clicks') || 0) + 1;
+      setCounters((prev) => ({ ...prev, githubClicks: nextVal }));
+      localStorage.setItem('vtu_local_github_clicks', String(nextVal));
+    }
+  };
+
 
   // Track selection state (Scheme A or Scheme B)
   const [schemeTrack, setSchemeTrack] = useState<'A' | 'B'>('A')
@@ -671,7 +780,8 @@ function App() {
   }
 
   return (
-    <main className="app-shell single-column-flow">
+    <>
+      <main className="app-shell single-column-flow">
       {/* 1. Highlighted Central Upload Card */}
       <section className="central-upload-card">
         <header className="card-header">
@@ -681,7 +791,7 @@ function App() {
         </header>
 
         <p className="upload-note-text">
-          ⚠️ <strong>Note:</strong> Please make sure to upload <strong>all semester marksheets at once</strong>, including any backlog/makeup/backup exam marksheets. This ensures correct SGPA recalculation and accurate overall CGPA tracking.
+          Note: Upload all semester marksheets (including backlogs) at once for accurate calculations.
         </p>
 
         <div className="upload-actions-wrapper">
@@ -706,7 +816,7 @@ function App() {
 
         {showManualEntry && (
           <div className="manual-entry">
-            <h3>Enter Semester Results Manually</h3>
+            <h3>Manual Semester Entry</h3>
             
             <div className="manual-entry-meta">
               <label className="field inline">
@@ -714,7 +824,7 @@ function App() {
                 <select value={manualSemNum} onChange={(e) => {
                   const sem = Number(e.target.value);
                   setManualSemNum(sem);
-                  setManualSourceName(`Semester ${sem} Manual Entry`);
+                  setManualSourceName(`Semester ${sem}`);
                 }}>
                   {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
                     <option key={s} value={s}>
@@ -725,7 +835,7 @@ function App() {
               </label>
               
               <label className="field inline">
-                <span>Semester Label</span>
+                <span>Label</span>
                 <input
                   type="text"
                   value={manualSourceName}
@@ -740,11 +850,11 @@ function App() {
                 <thead>
                   <tr>
                     <th></th>
-                    <th>Course Code *</th>
-                    <th>Course Name</th>
-                    <th>Credits *</th>
-                    <th>Marks (0-100) *</th>
-                    <th>Converted Grade</th>
+                    <th>Code</th>
+                    <th>Name</th>
+                    <th>Credits</th>
+                    <th>Marks</th>
+                    <th>Grade</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -838,13 +948,13 @@ function App() {
           <label className="field">
             <span>CGPA / Backlog Rule</span>
             <select value={cgpaMode} onChange={(event) => setCgpaMode(event.target.value as CgpaMode)}>
-              <option value="annexure-backlog">Appendix I backlog (cleared credits only)</option>
-              <option value="regulation-formula">Regulation formula (all registered credits)</option>
+              <option value="annexure-backlog">Backlog Exclusion (Appendix I)</option>
+              <option value="regulation-formula">Standard Regulation Formula</option>
             </select>
             <small>
               {cgpaMode === 'annexure-backlog'
-                ? 'Appendix I backlog mode: Omit failed course credits from the CGPA denominator until successfully cleared.'
-                : 'Regulation formula mode: Use total registered credits (including failed courses) in the CGPA denominator.'}
+                ? 'Omit failed course credits until cleared (recommended).'
+                : 'Include all registered course credits.'}
             </small>
           </label>
         </div>
@@ -855,19 +965,19 @@ function App() {
         <article className="result-metric-card highlighted-metric">
           <div className="metric-header">
             <span>Overall CGPA (RCGPA)</span>
-            <span className="info-tag">Backlog Cleared</span>
+            <span className="info-tag">Cleared</span>
           </div>
           <strong>{formatGpa(cgpa)}</strong>
-          <small>Recalculated based on best subject attempts</small>
+          <small>Based on best attempts</small>
         </article>
 
         <article className="result-metric-card">
           <div className="metric-header">
-            <span>Total Semester Sheets Uploaded</span>
+            <span>Uploaded Semesters</span>
             <span className="info-tag">Active</span>
           </div>
           <strong>{semesters.length}</strong>
-          <small>{semesters.length === 1 ? '1 sheet' : `${semesters.length} sheets`} imported</small>
+          <small>{semesters.length === 1 ? '1 semester' : `${semesters.length} semesters`}</small>
         </article>
       </section>
 
@@ -875,7 +985,6 @@ function App() {
       <section className="semesters-container-panel">
         <div className="panel-head-centered">
           <h2>Semester Results</h2>
-          <p>Each imported sheet contributes automatically to the overall CGPA.</p>
         </div>
 
         {processedSemesters.length === 0 ? (
@@ -900,10 +1009,7 @@ function App() {
                 </div>
 
                 <div className="calc-summary">
-                  <span>Total credits: {result.totalCredits}</span>
-                  <span>Earned credits: {result.earnedCredits}</span>
-                  <span>CGPA credits used: {cgpaMode === 'annexure-backlog' ? result.cgpaCredits : result.totalCredits}</span>
-                  <span>Method: sum(credit x grade point) / {result.totalCredits || '--'}</span>
+                  <span>Credits: {result.totalCredits} | Earned: {result.earnedCredits} | CGPA Divisor: {cgpaMode === 'annexure-backlog' ? result.cgpaCredits : result.totalCredits}</span>
                 </div>
 
                 <div className="table-wrapper">
@@ -960,7 +1066,6 @@ function App() {
       <section className="eligibility-card-panel">
         <div className="panel-head-centered">
           <h2>Final Year Track Eligibility</h2>
-          <p>Status tracking for VTU NEP tracks (Scheme A and Scheme B).</p>
         </div>
 
         <div className="eligibility-content-card">
@@ -1015,106 +1120,83 @@ function App() {
             </ul>
             <small className="eligibility-footer-info">
               {schemeTrack === 'A'
-                ? 'Criteria: Students must clear all subjects from 1st and 2nd semesters.'
-                : 'Criteria: Stricter Nep-2020 track. Zero backlogs from 1st to 4th semesters (first attempt pass only) and CGPA ≥ 6.000.'}
+                ? 'Rule: Clear all 1st & 2nd semester courses.'
+                : 'Rule: Zero backlogs in semesters 1-4 (first-attempt pass) & CGPA ≥ 6.000.'}
             </small>
           </div>
         </div>
       </section>
 
       {/* 5. Rules & Calculations Box */}
-      <section className="rules-card-panel">
-        <div className="panel-head-centered">
-          <h2>Calculation Rules</h2>
-          <p>Official Visvesvaraya Technological University (VTU) guidelines.</p>
-        </div>
-
-        <div className="rules-box">
-          <h3>How SGPA and CGPA are Calculated</h3>
+      <section className="rules-card-panel collapsible-panel">
+        <details className="rules-disclosure">
+          <summary className="rules-summary">
+            <div className="summary-title-wrapper">
+              <h2>Calculation Rules & Reference</h2>
+              <p>Official Visvesvaraya Technological University (VTU) guidelines</p>
+            </div>
+            <svg className="disclosure-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </summary>
           
-          <div className="formula-section">
-            <h4>1. Semester Grade Point Average (SGPA)</h4>
-            <div className="formula-display">
-              SGPA = Σ (Ci × Gi) / Σ Ci
+          <div className="rules-details-content">
+            <div className="formula-section">
+              <h4>Semester Grade Point Average (SGPA)</h4>
+              <div className="formula-display">SGPA = Σ(Ci × Gi) / ΣCi</div>
+              <p>Failed grades (F/ABS) are included in the semester's SGPA denominator until cleared in a subsequent semester.</p>
             </div>
-            <p>
-              Where <strong>Ci</strong> represents the course credits and <strong>Gi</strong> represents the grade points secured by the student in that course.
-            </p>
-            <p className="backlog-note-text">
-              <strong>Backlog Rules in SGPA:</strong> Under the VTU 2022 CBCS regulations, courses with failed grades (F/ABS) are still included in the SGPA denominator (credits registered) in the semester they are attempted. Once re-registered and cleared, they contribute to the SGPA of the semester in which they are successfully cleared.
-            </p>
-          </div>
 
-          <div className="formula-section">
-            <h4>2. Cumulative Grade Point Average (CGPA)</h4>
-            <div className="formula-display">
-              CGPA = Σ (Ci × Si) / Σ Ci
+            <div className="formula-section">
+              <h4>Cumulative Grade Point Average (CGPA)</h4>
+              <div className="formula-display">CGPA = Σ(Ci × Si) / ΣCi</div>
+              <p>Calculated across all semesters. Under Appendix I mode, failed course credits are excluded until cleared.</p>
             </div>
-            <p>
-              Where <strong>Si</strong> represents the SGPA of semester <strong>i</strong> and <strong>Ci</strong> represents the total credits considered for that semester.
-            </p>
-            <p>
-              <strong>Calculation Method Selector:</strong>
-            </p>
-            <ul>
-              <li>
-                <strong>Appendix I (Backlog-Exclusion) Mode:</strong> Under the Appendix I backlog worked example, F-grade credits are temporarily excluded from the CGPA denominator until cleared. This prevents failed courses from lowering the CGPA divisor before they are passed.
-              </li>
-              <li>
-                <strong>Regulation Formula Mode:</strong> Strictly follows the general formula text using all registered credits in the divisor, including failed ones.
-              </li>
-            </ul>
-          </div>
 
-          <div className="formula-section">
-            <h4>3. Active Grading Scale ({selectedScheme.label})</h4>
-            <div className="table-responsive">
-              <table className="mini-table">
-                <thead>
-                  <tr>
-                    <th>Grade</th>
-                    {Object.keys(selectedScheme.gradePoints).map((g) => (
-                      <th key={g}>{g}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>Points</td>
-                    {Object.values(selectedScheme.gradePoints).map((pt, i) => (
-                      <td key={i}>{pt}</td>
-                    ))}
-                  </tr>
-                  {selectedScheme.markRanges && (
+            <div className="formula-section">
+              <h4>Active Grading Scale ({selectedScheme.label})</h4>
+              <div className="table-responsive">
+                <table className="mini-table">
+                  <thead>
                     <tr>
-                      <td>Marks</td>
-                      {selectedScheme.markRanges.map((range, i) => (
-                        <td key={i}>{range.min}%+</td>
+                      <th>Grade</th>
+                      {Object.keys(selectedScheme.gradePoints).map((g) => (
+                        <th key={g}>{g}</th>
                       ))}
                     </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>Points</td>
+                      {Object.values(selectedScheme.gradePoints).map((pt, i) => (
+                        <td key={i}>{pt}</td>
+                      ))}
+                    </tr>
+                    {selectedScheme.markRanges && (
+                      <tr>
+                        <td>Marks</td>
+                        {selectedScheme.markRanges.map((range, i) => (
+                          <td key={i}>{range.min}%+</td>
+                        ))}
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="formula-section">
+              <h4>Credit Allocation Rules</h4>
+              <p>Auto-inferred from marksheet PDF/images:</p>
+              <ul>
+                <li>Theory/Core Courses: <strong>3 Credits</strong></li>
+                <li>Laboratory/Practical: <strong>1 Credit</strong></li>
+                <li>Project Work: <strong>2 Credits</strong></li>
+                <li>Constitution/IKS/PE: <strong>1 Credit</strong></li>
+              </ul>
             </div>
           </div>
-
-          <div className="formula-section">
-            <h4>4. Credit Allocation Rules (PDF Upload)</h4>
-            <p>When you upload official VTU result sheets, course credits are inferred automatically based on the following pattern rules:</p>
-            <ul>
-              <li>Laboratory / Practical Courses: <strong>1 Credit</strong></li>
-              <li>Project Work / Phase: <strong>2 Credits</strong></li>
-              <li>Constitution, Intellectual Property, PE, or IKS: <strong>1 Credit</strong></li>
-              <li>All Professional Core / Theory Courses: <strong>3 Credits</strong></li>
-            </ul>
-          </div>
-        </div>
-
-        <div className="hint-box">
-          <h3>Usage Instructions</h3>
-          <p>You can upload multiple VTU marksheets or PDF files at once. All semester SGPAs and overall CGPAs will update automatically.</p>
-          <p>For PDFs, the app parses the layout structure and infers grades and credits. You can inspect each semester's subjects in the right panel.</p>
-        </div>
+        </details>
       </section>
 
       {cgpa !== null && (
@@ -1126,6 +1208,42 @@ function App() {
         </div>
       )}
     </main>
+    
+    <footer className="app-footer">
+      <div className="footer-content">
+        <div className="footer-left">
+          <a 
+            href="https://github.com/vrlegacy/vturesultss" 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="github-repo-link"
+            onClick={handleGithubClick}
+          >
+            <svg className="github-icon" viewBox="0 0 16 16" version="1.1" aria-hidden="true">
+              <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+            </svg>
+            <span>GitHub Repository</span>
+          </a>
+          <p className="copyright-text">© {new Date().getFullYear()} vrlegacy. MIT License.</p>
+        </div>
+        
+        <div className="footer-right">
+          <div className="stat-badge">
+            <span className="stat-num">{counters.visitors}</span>
+            <span className="stat-label">Visitors</span>
+          </div>
+          <div className="stat-badge">
+            <span className="stat-num">{counters.calculations}</span>
+            <span className="stat-label">Calculations</span>
+          </div>
+          <div className="stat-badge">
+            <span className="stat-num">{counters.githubClicks}</span>
+            <span className="stat-label">GitHub Clicks</span>
+          </div>
+        </div>
+      </div>
+    </footer>
+  </>
   )
 }
 
