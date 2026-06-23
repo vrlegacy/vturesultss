@@ -158,7 +158,7 @@ function parseVtuPdfStyleText(rawText: string, scheme: Scheme) {
   const semesterMatch = normalizedText.match(/Semester\s*:\s*(\d{1,2})/i)
   const semester = semesterMatch ? Number(semesterMatch[1]) : null
   const rowPattern =
-    /([A-Z0-9-]{4,15})\s+(.+?)\s+([0-9A-Za-z-]{1,3})\s+([0-9A-Za-z-]{1,3})\s+([0-9A-Za-z-]{1,3})\s+([A-Za-z+*-]{1,5}|NE)(?:\s+(\d{4}-\d{2}-\d{2}))?/g
+    /(\d{0,2}[A-Z]{2,6}-?\d{1,4}[A-Z0-9/-]*)\s+(.+?)\s+([0-9A-Za-z-]{1,3})\s+([0-9A-Za-z-]{1,3})\s+([0-9A-Za-z-]{1,3})\s+([A-Za-z+*-]{1,5}|NE)(?:\s+(\d{4}-\d{2}-\d{2}))?/g
 
   const subjects: SubjectRow[] = []
 
