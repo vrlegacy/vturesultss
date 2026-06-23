@@ -733,12 +733,50 @@ function App() {
     setManualSourceName(`Semester ${manualSemNum < 8 ? manualSemNum + 1 : 8} Manual Entry`)
   }
 
-  function importText(sourceName: string, rawText: string) {
+  async function ocrPdf(file: File, progressCallback: (msg: string) => void): Promise<string> {
+    const buffer = await file.arrayBuffer()
+    const pdf = await pdfjsLib.getDocument({ data: buffer }).promise
+    const pageTexts: string[] = []
+
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      progressCallback(`Rendering page ${pageNumber} of ${pdf.numPages} for OCR...`)
+      const page = await pdf.getPage(pageNumber)
+      const viewport = page.getViewport({ scale: 2.0 })
+      
+      const canvas = document.createElement('canvas')
+      const context = canvas.getContext('2d')
+      if (!context) continue
+      
+      canvas.height = viewport.height
+      canvas.width = viewport.width
+      
+      await page.render({ canvasContext: context, viewport, canvas }).promise
+      
+      progressCallback(`Running OCR on page ${pageNumber} of ${pdf.numPages}...`)
+      const { data: { text } } = await Tesseract.recognize(
+        canvas,
+        'eng',
+        {
+          logger: m => {
+            if (m.status === 'recognizing text') {
+              progressCallback(
+                `Running OCR on page ${pageNumber}/${pdf.numPages}: ${Math.round(m.progress * 100)}%`
+              )
+            }
+          }
+        }
+      )
+      pageTexts.push(text)
+    }
+
+    return pageTexts.join('\n')
+  }
+
+  function importText(sourceName: string, rawText: string): boolean {
     const parsed = parseSemesterText(rawText, selectedScheme, sourceName)
 
     if (!parsed.subjects.length) {
-      setStatus('No subjects were detected. Use CODE NAME CREDITS GRADE for pasted text, or upload an official VTU result PDF.')
-      return
+      return false
     }
 
     const result = calculateSemesterResult(parsed, selectedScheme)
@@ -749,6 +787,7 @@ function App() {
     })
 
     setStatus(`Imported ${result.subjects.length} subjects from ${sourceName}.`)
+    return true
   }
 
   async function handleFileUpload(event: ChangeEvent<HTMLInputElement>) {
@@ -762,8 +801,25 @@ function App() {
 
       for (const file of files) {
         if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+          // 1. Try simple text extraction
           const pdfText = await pdfToText(file)
-          importText(file.name, pdfText)
+          const success = importText(file.name, pdfText)
+          
+          if (!success) {
+            // 2. If it cannot be extracted simply, tell the user and attempt OCR
+            setStatus(`PDF text extraction yielded no subjects. Attempting OCR... (For best results, please upload the official PDF downloaded from the VTU website)`)
+            
+            try {
+              const ocrText = await ocrPdf(file, (msg) => setStatus(msg))
+              const ocrSuccess = importText(file.name, ocrText)
+              if (!ocrSuccess) {
+                setStatus(`Failed to parse PDF even with OCR. Please upload the official PDF downloaded from the official VTU website.`)
+              }
+            } catch (ocrError) {
+              console.error("PDF OCR failed:", ocrError)
+              setStatus(`Failed to parse PDF. Please upload the official PDF downloaded from the official VTU website.`)
+            }
+          }
         } else if (file.type.startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(file.name)) {
           setStatus(`Loading OCR worker for ${file.name}...`)
           const { data: { text } } = await Tesseract.recognize(
@@ -777,11 +833,17 @@ function App() {
               }
             }
           )
-          importText(file.name, text)
+          const success = importText(file.name, text)
+          if (!success) {
+            setStatus(`Failed to parse image. Please upload a clear screenshot or the official PDF from the VTU website.`)
+          }
         } else {
           const rawText = await file.text()
           const cleanedText = file.name.toLowerCase().match(/\.html?$/) ? htmlToText(rawText) : rawText
-          importText(file.name, cleanedText)
+          const success = importText(file.name, cleanedText)
+          if (!success) {
+            setStatus(`Failed to parse file. Please upload the official PDF downloaded from the official VTU website.`)
+          }
         }
       }
     } catch (error) {
@@ -1004,22 +1066,31 @@ function App() {
           <div className="empty-state-centered">No semesters imported yet. Please use the upload card above.</div>
         ) : (
           <div className="semester-stack">
-            {processedSemesters.map((result, index) => (
-              <article key={`${result.sourceName}-${index}`} className="semester-card">
-                <div className="semester-head">
-                  <div>
-                    <p className="semester-tag">Semester {result.semester ?? 'Unknown'}</p>
-                    <h3>{result.sourceName}</h3>
-                  </div>
-                  {result.recalculatedSgpa !== null ? (
-                    <div className="sgpa-pill-group">
-                      <span className="sgpa-pill original strikes">SGPA {formatGpa(result.sgpa)}</span>
-                      <span className="sgpa-pill recalculated">Recalculated: {formatGpa(result.recalculatedSgpa)}</span>
+            {processedSemesters.map((result, index) => {
+              const marksSubjects = result.subjects.filter(sub => typeof sub.total === 'number' && sub.total !== undefined);
+              const totalObtained = marksSubjects.reduce((sum, s) => sum + (s.total || 0), 0);
+              const totalMax = marksSubjects.length * 100;
+              const marksDisplay = marksSubjects.length > 0 ? `${totalObtained}/${totalMax}` : null;
+
+              return (
+                <article key={`${result.sourceName}-${index}`} className="semester-card">
+                  <div className="semester-head">
+                    <div>
+                      <p className="semester-tag">Semester {result.semester ?? 'Unknown'}</p>
+                      <h3>{result.sourceName}</h3>
                     </div>
-                  ) : (
-                    <div className="sgpa-pill">SGPA {formatGpa(result.sgpa)}</div>
-                  )}
-                </div>
+                    <div className="semester-head-stats">
+                      {marksDisplay && <span className="marks-pill" title="Total Marks">Marks: {marksDisplay}</span>}
+                      {result.recalculatedSgpa !== null ? (
+                        <div className="sgpa-pill-group">
+                          <span className="sgpa-pill original strikes">SGPA {formatGpa(result.sgpa)}</span>
+                          <span className="sgpa-pill recalculated">Recalculated: {formatGpa(result.recalculatedSgpa)}</span>
+                        </div>
+                      ) : (
+                        <div className="sgpa-pill">SGPA {formatGpa(result.sgpa)}</div>
+                      )}
+                    </div>
+                  </div>
 
                 <div className="calc-summary">
                   <span>Credits: {result.totalCredits} | Earned: {result.earnedCredits} | CGPA Divisor: {cgpaMode === 'annexure-backlog' ? result.cgpaCredits : result.totalCredits}</span>
@@ -1070,7 +1141,8 @@ function App() {
                   </div>
                 )}
               </article>
-            ))}
+            )
+          })}
           </div>
         )}
       </section>

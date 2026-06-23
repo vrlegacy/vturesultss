@@ -1441,5 +1441,32 @@ tbody tr:hover {
   }
 }
 
+/* Semester Head Stats & Marks Pill */
+.semester-head-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.marks-pill {
+  background: #eef3ef;
+  color: #2e5a2e;
+  border: 1px solid rgba(46, 90, 46, 0.12);
+  border-radius: 999px;
+  padding: 10px 14px;
+  white-space: nowrap;
+  font-family: 'Trebuchet MS', sans-serif;
+  font-weight: 700;
+}
+
+@media (max-width: 600px) {
+  .marks-pill {
+    padding: 8px 10px;
+    font-size: 0.85rem;
+  }
+}
+
+
 
 
