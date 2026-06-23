@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from 'react'
 import type { ChangeEvent } from 'react'
 import * as pdfjsLib from 'pdfjs-dist'
+import Tesseract from 'tesseract.js'
 
 type GradeMap = Record<string, number>
 
@@ -353,12 +354,9 @@ function App() {
     [selectedSchemeId],
   )
 
-  const defaultGradeForSelectedScheme = useMemo(() => {
-    return Object.keys(selectedScheme.gradePoints)[0] || 'O'
-  }, [selectedScheme])
 
-  const [manualCourses, setManualCourses] = useState<Array<{ code: string; name: string; credits: number; grade: string }>>([
-    { code: '', name: '', credits: 3, grade: 'O' }
+  const [manualCourses, setManualCourses] = useState<Array<{ code: string; name: string; credits: number; marks: number; grade: string }>>([
+    { code: '', name: '', credits: 3, marks: 0, grade: 'F' }
   ])
 
   // Initialize manual courses with correct grade when scheme changes
@@ -366,10 +364,10 @@ function App() {
     setManualCourses((current) =>
       current.map((item) => ({
         ...item,
-        grade: Object.keys(selectedScheme.gradePoints).includes(item.grade) ? item.grade : defaultGradeForSelectedScheme
+        grade: inferGradeFromMarks(item.marks, selectedScheme)
       }))
     )
-  }, [selectedScheme, defaultGradeForSelectedScheme])
+  }, [selectedScheme])
 
   const processedSemesters = useMemo(() => {
     // Map each course code to all its attempts across semesters
@@ -543,14 +541,14 @@ function App() {
   function addManualCourseRow() {
     setManualCourses((current) => [
       ...current,
-      { code: '', name: '', credits: 3, grade: defaultGradeForSelectedScheme }
+      { code: '', name: '', credits: 3, marks: 0, grade: 'F' }
     ])
   }
 
   function removeManualCourseRow(index: number) {
     setManualCourses((current) => {
       const updated = current.filter((_, idx) => idx !== index)
-      return updated.length === 0 ? [{ code: '', name: '', credits: 3, grade: defaultGradeForSelectedScheme }] : updated
+      return updated.length === 0 ? [{ code: '', name: '', credits: 3, marks: 0, grade: 'F' }] : updated
     })
   }
 
@@ -558,7 +556,13 @@ function App() {
     setManualCourses((current) =>
       current.map((item, idx) => {
         if (idx !== index) return item
-        return { ...item, [field]: value }
+        const updated = { ...item, [field]: value }
+        if (field === 'marks') {
+          const marksVal = Math.min(100, Math.max(0, Number(value) || 0))
+          updated.marks = marksVal
+          updated.grade = inferGradeFromMarks(marksVal, selectedScheme)
+        }
+        return updated
       })
     )
   }
@@ -580,6 +584,7 @@ function App() {
       name: c.name.trim() || `Subject ${c.code.toUpperCase().trim()}`,
       credits: Number(c.credits) || 3,
       grade: c.grade.toUpperCase().trim(),
+      total: c.marks,
     }))
 
     const parsed: ParsedSemester = {
@@ -601,7 +606,7 @@ function App() {
     setShowManualEntry(false)
 
     // Reset manual form for next time
-    setManualCourses([{ code: '', name: '', credits: 3, grade: defaultGradeForSelectedScheme }])
+    setManualCourses([{ code: '', name: '', credits: 3, marks: 0, grade: 'F' }])
     setManualSemNum((prev) => (prev < 8 ? prev + 1 : 8))
     setManualSourceName(`Semester ${manualSemNum < 8 ? manualSemNum + 1 : 8} Manual Entry`)
   }
@@ -637,6 +642,20 @@ function App() {
         if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
           const pdfText = await pdfToText(file)
           importText(file.name, pdfText)
+        } else if (file.type.startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(file.name)) {
+          setStatus(`Loading OCR worker for ${file.name}...`)
+          const { data: { text } } = await Tesseract.recognize(
+            file,
+            'eng',
+            {
+              logger: m => {
+                if (m.status === 'recognizing text') {
+                  setStatus(`Running OCR on ${file.name}: ${Math.round(m.progress * 100)}%`)
+                }
+              }
+            }
+          )
+          importText(file.name, text)
         } else {
           const rawText = await file.text()
           const cleanedText = file.name.toLowerCase().match(/\.html?$/) ? htmlToText(rawText) : rawText
@@ -667,11 +686,11 @@ function App() {
 
         <div className="upload-actions-wrapper">
           <label className="upload-button highlight-upload-btn">
-            Upload PDF / text files
+            Upload files (PDF / Image / Text)
             <input
               type="file"
               multiple
-              accept=".txt,.html,.htm,.csv,.pdf,application/pdf"
+              accept=".txt,.html,.htm,.csv,.pdf,application/pdf,image/*,.png,.jpg,.jpeg"
               onChange={handleFileUpload}
             />
           </label>
@@ -720,16 +739,26 @@ function App() {
               <table className="manual-entry-table">
                 <thead>
                   <tr>
+                    <th></th>
                     <th>Course Code *</th>
                     <th>Course Name</th>
                     <th>Credits *</th>
-                    <th>Grade *</th>
-                    <th></th>
+                    <th>Marks (0-100) *</th>
+                    <th>Converted Grade</th>
                   </tr>
                 </thead>
                 <tbody>
                   {manualCourses.map((course, index) => (
                     <tr key={index}>
+                      <td>
+                        <button
+                          type="button"
+                          className="delete-row-btn"
+                          onClick={() => removeManualCourseRow(index)}
+                        >
+                          ×
+                        </button>
+                      </td>
                       <td>
                         <input
                           type="text"
@@ -759,26 +788,17 @@ function App() {
                         />
                       </td>
                       <td>
-                        <select
-                          value={Object.keys(selectedScheme.gradePoints).includes(course.grade) ? course.grade : defaultGradeForSelectedScheme}
-                          onChange={(e) => handleManualCourseChange(index, 'grade', e.target.value)}
-                          className="grade-select"
-                        >
-                          {Object.keys(selectedScheme.gradePoints).map((g) => (
-                            <option key={g} value={g}>
-                              {g}
-                            </option>
-                          ))}
-                        </select>
+                        <input
+                          type="number"
+                          value={course.marks}
+                          onChange={(e) => handleManualCourseChange(index, 'marks', Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+                          min="0"
+                          max="100"
+                          className="marks-input"
+                        />
                       </td>
                       <td>
-                        <button
-                          type="button"
-                          className="delete-row-btn"
-                          onClick={() => removeManualCourseRow(index)}
-                        >
-                          ×
-                        </button>
+                        <span className="converted-grade-badge">{course.grade}</span>
                       </td>
                     </tr>
                   ))}

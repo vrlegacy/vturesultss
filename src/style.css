@@ -1141,3 +1141,126 @@ th {
   }
 }
 
+/* Converted Grade Badge */
+.converted-grade-badge {
+  display: inline-block;
+  padding: 6px 14px;
+  background: #fff1df;
+  color: var(--accent-dark);
+  font-weight: 700;
+  border-radius: 8px;
+  font-family: 'Trebuchet MS', sans-serif;
+  box-shadow: 0 2px 6px rgba(179, 75, 41, 0.08);
+}
+
+/* Table Structured Theme (Feel like a real table) */
+table, 
+.manual-entry-table, 
+.mini-table {
+  border-collapse: collapse;
+  width: 100%;
+  border: 1px solid var(--line);
+  background: var(--panel-strong);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+th, td {
+  border: 1px solid var(--line) !important;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+th {
+  background: rgba(33, 48, 50, 0.05) !important;
+  font-family: 'Trebuchet MS', sans-serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+}
+
+tbody tr:nth-child(even) {
+  background-color: rgba(33, 48, 50, 0.02);
+}
+
+tbody tr:hover {
+  background-color: rgba(179, 75, 41, 0.03) !important;
+  transition: background-color 0.2s ease;
+}
+
+/* Optimized Card Responsiveness for Mobile Viewports */
+@media (max-width: 600px) {
+  .app-shell.single-column-flow {
+    width: min(850px, calc(100% - 16px));
+    padding: 16px 0 90px;
+    gap: 16px;
+  }
+
+  .central-upload-card {
+    padding: 20px 16px;
+    border-radius: 20px;
+  }
+
+  .central-upload-card h1 {
+    font-size: 1.55rem;
+  }
+
+  .upload-note-text {
+    padding: 10px 12px;
+    font-size: 0.85rem;
+    margin: 14px 0;
+  }
+
+  .results-metrics-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .result-metric-card {
+    padding: 16px;
+    border-radius: 18px;
+    min-height: 100px;
+  }
+
+  .result-metric-card strong {
+    font-size: 1.8rem;
+  }
+
+  .semesters-container-panel,
+  .eligibility-card-panel,
+  .rules-card-panel {
+    padding: 16px 12px;
+    border-radius: 20px;
+  }
+  
+  .semester-card {
+    padding: 14px 10px;
+    border-radius: 16px;
+  }
+  
+  .table-wrapper {
+    border-radius: 10px;
+  }
+
+  .manual-entry-table th,
+  .manual-entry-table td {
+    padding: 8px 6px;
+    font-size: 0.82rem;
+  }
+  
+  .manual-entry-table input,
+  .manual-entry-table select {
+    padding: 6px 8px;
+    font-size: 0.82rem;
+  }
+
+  .converted-grade-badge {
+    padding: 4px 10px;
+    font-size: 0.8rem;
+  }
+}
+
+
+
