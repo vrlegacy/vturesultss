@@ -376,7 +376,8 @@ function App() {
     const subjectAttempts: Record<string, Array<{ semester: number; grade: string; points: number; sourceName: string }>> = {};
     
     semesters.forEach((sem) => {
-      if (sem.semester === null) return;
+      const semNum = sem.semester;
+      if (semNum === null) return;
       sem.subjects.forEach((sub) => {
         const code = sub.code.toUpperCase().trim();
         const points = selectedScheme.gradePoints[sub.grade] ?? 0;
@@ -384,7 +385,7 @@ function App() {
           subjectAttempts[code] = [];
         }
         subjectAttempts[code].push({
-          semester: sem.semester,
+          semester: semNum,
           grade: sub.grade,
           points,
           sourceName: sem.sourceName
@@ -398,7 +399,12 @@ function App() {
           ...sem,
           recalculatedSgpa: null,
           recalculations: [],
-          subjectsWithRecalc: sem.subjects.map(s => ({ ...s, isRecalculated: false }))
+          subjectsWithRecalc: sem.subjects.map(s => ({
+            ...s,
+            isRecalculated: false,
+            recalculatedGrade: undefined,
+            recalculatedPoints: undefined
+          })) as RecalcSubjectRow[]
         };
       }
 
@@ -406,7 +412,7 @@ function App() {
       let recalculatedWeightedTotal = 0;
       let totalCredits = 0;
 
-      const subjectsWithRecalc = sem.subjects.map((sub) => {
+      const subjectsWithRecalc: RecalcSubjectRow[] = sem.subjects.map((sub) => {
         const code = sub.code.toUpperCase().trim();
         const originalPoints = selectedScheme.gradePoints[sub.grade] ?? 0;
         const isFailed = originalPoints === 0;
@@ -440,7 +446,9 @@ function App() {
         recalculatedWeightedTotal += originalPoints * sub.credits;
         return {
           ...sub,
-          isRecalculated: false
+          isRecalculated: false,
+          recalculatedGrade: undefined,
+          recalculatedPoints: undefined
         };
       });
 
