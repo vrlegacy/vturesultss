@@ -1,7 +1,20 @@
 import { useMemo, useState, useEffect } from 'react'
 import type { ChangeEvent } from 'react'
-import * as pdfjsLib from 'pdfjs-dist'
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs'
 import Tesseract from 'tesseract.js'
+
+// Polyfill Promise.withResolvers for older browser compatibility (e.g. Safari < 17.4)
+if (typeof (Promise as any).withResolvers === 'undefined') {
+  (Promise as any).withResolvers = function <T>() {
+    let resolve!: (value: T | PromiseLike<T>) => void;
+    let reject!: (reason?: any) => void;
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  };
+}
 
 type GradeMap = Record<string, number>
 
@@ -84,7 +97,7 @@ const schemes: Scheme[] = [
 
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
+  'pdfjs-dist/legacy/build/pdf.worker.min.mjs',
   import.meta.url,
 ).toString()
 
