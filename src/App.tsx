@@ -858,9 +858,9 @@ function App() {
             // Sort items by Y descending (top-to-bottom)
             items.sort((a, b) => b.y - a.y)
 
-            // Group items into lines visually (within a tolerance of 6 points)
+            // Group items into lines visually (within a tolerance of 3 points)
             const lines: Array<{ y: number; items: typeof items }> = []
-            const tolerance = 6
+            const tolerance = 3
 
             for (const item of items) {
               const foundLine = lines.find(line => Math.abs(line.y - item.y) <= tolerance)
