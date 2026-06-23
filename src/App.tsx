@@ -1,7 +1,6 @@
 import { useMemo, useState, useEffect } from 'react'
 import type { ChangeEvent } from 'react'
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs'
-import Tesseract from 'tesseract.js'
 
 // Polyfill Promise.withResolvers for older browser compatibility (e.g. Safari < 17.4)
 if (typeof (Promise as any).withResolvers === 'undefined') {
@@ -870,64 +869,13 @@ function App() {
             if (success) {
               anySuccess = true
               parsedPagesCount++
-            } else {
-              // 2. Fallback to OCR for this page
-              setStatus(`Text extraction yielded no subjects for page ${pageNumber}. Running OCR...`)
-              try {
-                const viewport = page.getViewport({ scale: 2.0 })
-                const canvas = document.createElement('canvas')
-                const context = canvas.getContext('2d')
-                if (!context) continue
-
-                canvas.height = viewport.height
-                canvas.width = viewport.width
-
-                await page.render({ canvasContext: context, viewport, canvas }).promise
-
-                setStatus(`Running OCR on page ${pageNumber}/${pdf.numPages}...`)
-                const { data: { text } } = await Tesseract.recognize(
-                  canvas,
-                  'eng',
-                  {
-                    logger: m => {
-                      if (m.status === 'recognizing text') {
-                        setStatus(`OCR page ${pageNumber}/${pdf.numPages}: ${Math.round(m.progress * 100)}%`)
-                      }
-                    }
-                  }
-                )
-                const ocrSuccess = importText(pageSourceName, text)
-                if (ocrSuccess) {
-                  anySuccess = true
-                  parsedPagesCount++
-                }
-              } catch (ocrErr) {
-                console.error(`OCR failed for page ${pageNumber}:`, ocrErr)
-              }
             }
           }
 
           if (anySuccess) {
             setStatus(`Successfully imported ${parsedPagesCount} semester(s) from ${file.name}.`)
           } else {
-            setStatus(`Failed to parse PDF even with OCR. Please upload the official PDF downloaded from the official VTU website.`)
-          }
-        } else if (file.type.startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(file.name)) {
-          setStatus(`Loading OCR worker for ${file.name}...`)
-          const { data: { text } } = await Tesseract.recognize(
-            file,
-            'eng',
-            {
-              logger: m => {
-                if (m.status === 'recognizing text') {
-                  setStatus(`Running OCR on ${file.name}: ${Math.round(m.progress * 100)}%`)
-                }
-              }
-            }
-          )
-          const success = importText(file.name, text)
-          if (!success) {
-            setStatus(`Failed to parse image. Please upload a clear screenshot or the official PDF from the VTU website.`)
+            setStatus(`Failed to parse PDF. Please upload the official PDF downloaded from the official VTU website.`)
           }
         } else {
           const rawText = await file.text()
@@ -963,11 +911,11 @@ function App() {
 
         <div className="upload-actions-wrapper">
           <label className="upload-button highlight-upload-btn">
-            Upload files (PDF / Image / Text)
+            Upload files (PDF / Text)
             <input
               type="file"
               multiple
-              accept=".txt,.html,.htm,.csv,.pdf,application/pdf,image/*,.png,.jpg,.jpeg"
+              accept=".txt,.html,.htm,.csv,.pdf,application/pdf"
               onChange={handleFileUpload}
             />
           </label>
