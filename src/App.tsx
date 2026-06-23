@@ -96,10 +96,7 @@ const schemes: Scheme[] = [
 
 
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/legacy/build/pdf.worker.min.mjs',
-  import.meta.url,
-).toString()
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.0.227/legacy/build/pdf.worker.min.mjs'
 
 function formatGpa(value: number | null | undefined): string {
   if (value === null || value === undefined || isNaN(value)) {
@@ -124,7 +121,9 @@ function getOrdinalSuffix(num: number): string {
 }
 
 function normalizeGrade(value: string) {
-  return value.toUpperCase().replace(/\s+/g, '')
+  const norm = value.toUpperCase().replace(/\s+/g, '')
+  if (norm === 'AB' || norm === 'ABSENT') return 'ABS'
+  return norm
 }
 
 function inferGradeFromMarks(total: number, scheme: Scheme) {
@@ -157,28 +156,18 @@ function inferCredits(code: string, name: string) {
 
 function parseVtuPdfStyleText(rawText: string, scheme: Scheme) {
   const normalizedText = rawText.replace(/\s+/g, ' ').trim()
-  const semesterMatch = normalizedText.match(/Semester\s*:\s*(\d{1,2})/)
+  const semesterMatch = normalizedText.match(/Semester\s*:\s*(\d{1,2})/i)
   const semester = semesterMatch ? Number(semesterMatch[1]) : null
-  const firstSemesterStart = normalizedText.search(/Semester\s*:\s*\d{1,2}\s+Subject Code/i)
-  const nextSemesterMatch =
-    firstSemesterStart >= 0
-      ? normalizedText.slice(firstSemesterStart + 1).match(/Semester\s*:\s*\d{1,2}\s+Subject Code/i)
-      : null
-  const firstBlock =
-    firstSemesterStart >= 0
-      ? nextSemesterMatch && nextSemesterMatch.index !== undefined
-        ? normalizedText.slice(firstSemesterStart, firstSemesterStart + 1 + nextSemesterMatch.index)
-        : normalizedText.slice(firstSemesterStart)
-      : normalizedText
   const rowPattern =
-    /([A-Z]{3,6}\d{3,4}[A-Z]?)\s+(.+?)\s+(\d{1,3})\s+(\d{1,3})\s+(\d{1,3})\s+([PFAWX]|NE)\s+(\d{4}-\d{2}-\d{2})/g
+    /([A-Z0-9-]{4,15})\s+(.+?)\s+([0-9A-Za-z-]{1,3})\s+([0-9A-Za-z-]{1,3})\s+([0-9A-Za-z-]{1,3})\s+([A-Za-z+*-]{1,5}|NE)(?:\s+(\d{4}-\d{2}-\d{2}))?/g
 
   const subjects: SubjectRow[] = []
 
-  for (const match of firstBlock.matchAll(rowPattern)) {
+  for (const match of normalizedText.matchAll(rowPattern)) {
     const code = match[1].trim()
     const name = match[2].trim()
-    const total = Number(match[5])
+    const totalVal = Number(match[5])
+    const total = isNaN(totalVal) ? 0 : totalVal
     const result = normalizeGrade(match[6])
     const grade = result === 'P' ? inferGradeFromMarks(total, scheme) : result
 
@@ -219,7 +208,7 @@ function parseSemesterText(rawText: string, scheme: Scheme, sourceName: string):
   const subjects = lines
     .map((line) => {
       const match = line.match(
-        /^([A-Z0-9-]{5,20})\s+(.+?)\s+(\d+(?:\.\d+)?)\s+([A-Za-z+ ]{1,5}|ABS)$/i,
+        /^([A-Z0-9-]{4,20})\s+(.+?)\s+(\d+(?:\.\d+)?)\s+([A-Za-z+ ]{1,5}|ABS)$/i,
       )
 
       if (!match) {
@@ -250,23 +239,7 @@ function htmlToText(rawHtml: string) {
   return doc.body.textContent ?? rawHtml
 }
 
-async function pdfToText(file: File) {
-  const buffer = await file.arrayBuffer()
-  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise
-  const pages: string[] = []
 
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-    const page = await pdf.getPage(pageNumber)
-    const content = await page.getTextContent()
-    const text = content.items
-      .map((item) => ('str' in item ? item.str : ''))
-      .join(' ')
-      .replace(/\s{2,}/g, ' ')
-    pages.push(text)
-  }
-
-  return pages.join('\n')
-}
 
 function calculateSemesterResult(parsed: ParsedSemester, scheme: Scheme): SemesterResult {
   let weightedTotal = 0
@@ -733,45 +706,6 @@ function App() {
     setManualSourceName(`Semester ${manualSemNum < 8 ? manualSemNum + 1 : 8} Manual Entry`)
   }
 
-  async function ocrPdf(file: File, progressCallback: (msg: string) => void): Promise<string> {
-    const buffer = await file.arrayBuffer()
-    const pdf = await pdfjsLib.getDocument({ data: buffer }).promise
-    const pageTexts: string[] = []
-
-    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-      progressCallback(`Rendering page ${pageNumber} of ${pdf.numPages} for OCR...`)
-      const page = await pdf.getPage(pageNumber)
-      const viewport = page.getViewport({ scale: 2.0 })
-      
-      const canvas = document.createElement('canvas')
-      const context = canvas.getContext('2d')
-      if (!context) continue
-      
-      canvas.height = viewport.height
-      canvas.width = viewport.width
-      
-      await page.render({ canvasContext: context, viewport, canvas }).promise
-      
-      progressCallback(`Running OCR on page ${pageNumber} of ${pdf.numPages}...`)
-      const { data: { text } } = await Tesseract.recognize(
-        canvas,
-        'eng',
-        {
-          logger: m => {
-            if (m.status === 'recognizing text') {
-              progressCallback(
-                `Running OCR on page ${pageNumber}/${pdf.numPages}: ${Math.round(m.progress * 100)}%`
-              )
-            }
-          }
-        }
-      )
-      pageTexts.push(text)
-    }
-
-    return pageTexts.join('\n')
-  }
-
   function importText(sourceName: string, rawText: string): boolean {
     const parsed = parseSemesterText(rawText, selectedScheme, sourceName)
 
@@ -801,24 +735,103 @@ function App() {
 
       for (const file of files) {
         if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-          // 1. Try simple text extraction
-          const pdfText = await pdfToText(file)
-          const success = importText(file.name, pdfText)
-          
-          if (!success) {
-            // 2. If it cannot be extracted simply, tell the user and attempt OCR
-            setStatus(`PDF text extraction yielded no subjects. Attempting OCR... (For best results, please upload the official PDF downloaded from the VTU website)`)
+          setStatus(`Loading PDF: ${file.name}...`)
+          const buffer = await file.arrayBuffer()
+          const pdf = await pdfjsLib.getDocument({
+            data: buffer,
+            cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.0.227/cmaps/',
+            cMapPacked: true,
+            standardFontDataUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.0.227/standard_fonts/',
+          }).promise
+
+          let anySuccess = false
+          let parsedPagesCount = 0
+
+          for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+            const page = await pdf.getPage(pageNumber)
             
-            try {
-              const ocrText = await ocrPdf(file, (msg) => setStatus(msg))
-              const ocrSuccess = importText(file.name, ocrText)
-              if (!ocrSuccess) {
-                setStatus(`Failed to parse PDF even with OCR. Please upload the official PDF downloaded from the official VTU website.`)
+            // 1. Try simple text extraction with visual coordinate sorting
+            const content = await page.getTextContent()
+            const items = content.items
+              .map(item => {
+                if (!('str' in item) || !item.str.trim()) return null
+                return {
+                  str: item.str,
+                  x: item.transform[4],
+                  y: item.transform[5]
+                }
+              })
+              .filter((item): item is { str: string; x: number; y: number } => item !== null)
+
+            // Sort items by Y descending (top-to-bottom)
+            items.sort((a, b) => b.y - a.y)
+
+            // Group items into lines visually (within a tolerance of 6 points)
+            const lines: Array<{ y: number; items: typeof items }> = []
+            const tolerance = 6
+
+            for (const item of items) {
+              const foundLine = lines.find(line => Math.abs(line.y - item.y) <= tolerance)
+              if (foundLine) {
+                foundLine.items.push(item)
+              } else {
+                lines.push({ y: item.y, items: [item] })
               }
-            } catch (ocrError) {
-              console.error("PDF OCR failed:", ocrError)
-              setStatus(`Failed to parse PDF. Please upload the official PDF downloaded from the official VTU website.`)
             }
+
+            // For each line, sort items by X ascending (left-to-right) and join
+            const pageText = lines.map(line => {
+              line.items.sort((a, b) => a.x - b.x)
+              return line.items.map(item => item.str).join(' ')
+            }).join('\n')
+
+            const pageSourceName = pdf.numPages > 1 ? `${file.name} (Page ${pageNumber})` : file.name
+            let success = importText(pageSourceName, pageText)
+
+            if (success) {
+              anySuccess = true
+              parsedPagesCount++
+            } else {
+              // 2. Fallback to OCR for this page
+              setStatus(`Text extraction yielded no subjects for page ${pageNumber}. Running OCR...`)
+              try {
+                const viewport = page.getViewport({ scale: 2.0 })
+                const canvas = document.createElement('canvas')
+                const context = canvas.getContext('2d')
+                if (!context) continue
+
+                canvas.height = viewport.height
+                canvas.width = viewport.width
+
+                await page.render({ canvasContext: context, viewport, canvas }).promise
+
+                setStatus(`Running OCR on page ${pageNumber}/${pdf.numPages}...`)
+                const { data: { text } } = await Tesseract.recognize(
+                  canvas,
+                  'eng',
+                  {
+                    logger: m => {
+                      if (m.status === 'recognizing text') {
+                        setStatus(`OCR page ${pageNumber}/${pdf.numPages}: ${Math.round(m.progress * 100)}%`)
+                      }
+                    }
+                  }
+                )
+                const ocrSuccess = importText(pageSourceName, text)
+                if (ocrSuccess) {
+                  anySuccess = true
+                  parsedPagesCount++
+                }
+              } catch (ocrErr) {
+                console.error(`OCR failed for page ${pageNumber}:`, ocrErr)
+              }
+            }
+          }
+
+          if (anySuccess) {
+            setStatus(`Successfully imported ${parsedPagesCount} semester(s) from ${file.name}.`)
+          } else {
+            setStatus(`Failed to parse PDF even with OCR. Please upload the official PDF downloaded from the official VTU website.`)
           }
         } else if (file.type.startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(file.name)) {
           setStatus(`Loading OCR worker for ${file.name}...`)
