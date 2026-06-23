@@ -347,6 +347,85 @@ function App() {
     githubClicks: 92,
   })
 
+  const [editingSemIndex, setEditingSemIndex] = useState<number | null>(null)
+
+  function updateSemesterSubject(semIndex: number, subIndex: number, field: keyof SubjectRow, value: any) {
+    setSemesters((current) => {
+      return current.map((sem, sIdx) => {
+        if (sIdx !== semIndex) return sem
+
+        const updatedSubjects = sem.subjects.map((sub, idx) => {
+          if (idx !== subIndex) return sub
+          const updated = { ...sub, [field]: value }
+          
+          if (field === 'total') {
+            const val = Math.max(0, Math.min(100, Number(value) || 0))
+            updated.total = val
+            updated.grade = inferGradeFromMarks(val, selectedScheme)
+          }
+          if (field === 'grade') {
+            updated.grade = value.toUpperCase().trim()
+          }
+          if (field === 'credits') {
+            updated.credits = Number(value) || 1
+          }
+          return updated
+        })
+
+        const parsed: ParsedSemester = {
+          ...sem,
+          subjects: updatedSubjects,
+        }
+        
+        return calculateSemesterResult(parsed, selectedScheme)
+      })
+    })
+  }
+
+  function deleteSemesterSubject(semIndex: number, subIndex: number) {
+    setSemesters((current) => {
+      return current.map((sem, sIdx) => {
+        if (sIdx !== semIndex) return sem
+
+        const updatedSubjects = sem.subjects.filter((_, idx) => idx !== subIndex)
+        
+        const parsed: ParsedSemester = {
+          ...sem,
+          subjects: updatedSubjects.length > 0 ? updatedSubjects : [{ code: 'NEW', name: 'New Subject', credits: 3, grade: 'F', total: 0 }],
+        }
+        
+        return calculateSemesterResult(parsed, selectedScheme)
+      })
+    })
+  }
+
+  function addSemesterSubject(semIndex: number) {
+    setSemesters((current) => {
+      return current.map((sem, sIdx) => {
+        if (sIdx !== semIndex) return sem
+
+        const updatedSubjects = [
+          ...sem.subjects,
+          { code: '', name: '', credits: 3, grade: 'F', total: 0 }
+        ]
+
+        const parsed: ParsedSemester = {
+          ...sem,
+          subjects: updatedSubjects,
+        }
+        
+        return calculateSemesterResult(parsed, selectedScheme)
+      })
+    })
+  }
+
+  function deleteSemesterCard(semIndex: number) {
+    setSemesters((current) => current.filter((_, idx) => idx !== semIndex))
+    if (editingSemIndex === semIndex) {
+      setEditingSemIndex(null)
+    }
+  }
+
   // Initialize and track counters
   useEffect(() => {
     const initCounters = async () => {
@@ -1091,6 +1170,38 @@ function App() {
                     <div>
                       <p className="semester-tag">Semester {result.semester ?? 'Unknown'}</p>
                       <h3>{result.sourceName}</h3>
+                      <div className="semester-card-actions">
+                        {editingSemIndex === index ? (
+                          <button
+                            type="button"
+                            className="btn-card-action done"
+                            onClick={() => setEditingSemIndex(null)}
+                          >
+                            Save
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              className="btn-card-action edit"
+                              onClick={() => setEditingSemIndex(index)}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-card-action delete"
+                              onClick={() => {
+                                if (confirm(`Are you sure you want to delete ${result.sourceName}?`)) {
+                                  deleteSemesterCard(index)
+                                }
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
                     <div className="semester-head-stats">
                       {marksDisplay && <span className="marks-pill" title="Total Marks">Marks: {marksDisplay}</span>}
@@ -1105,56 +1216,146 @@ function App() {
                     </div>
                   </div>
 
-                <div className="calc-summary">
-                  <span>Credits: {result.totalCredits} | Earned: {result.earnedCredits} | CGPA Divisor: {cgpaMode === 'annexure-backlog' ? result.cgpaCredits : result.totalCredits}</span>
-                </div>
-
-                <div className="table-wrapper">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Code</th>
-                        <th>Subject</th>
-                        <th>Total</th>
-                        <th>Credits</th>
-                        <th>Grade</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {result.subjectsWithRecalc.map((subject) => (
-                        <tr key={subject.code} className={subject.isRecalculated ? 'recalculated-row' : ''}>
-                          <td>{subject.code}</td>
-                          <td>{subject.name}</td>
-                          <td>{subject.total ?? '--'}</td>
-                          <td>{subject.credits}</td>
-                          <td className="grade-cell">
-                            {subject.isRecalculated ? (
-                              <>
-                                <span className="original-grade strikes">{subject.grade}</span>
-                                <span className="arrow-sep"> ➔ </span>
-                                <span className="new-grade">{subject.recalculatedGrade}</span>
-                              </>
-                            ) : (
-                              subject.grade
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {result.recalculations.length > 0 && (
-                  <div className="recalc-comments-box">
-                    {result.recalculations.map((recalc) => (
-                      <div key={recalc.code} className="recalc-comment">
-                        💡 <strong>{recalc.code}</strong> recalculated based on you passed it in {recalc.passedSem}{getOrdinalSuffix(recalc.passedSem)} sem
-                      </div>
-                    ))}
+                  <div className="calc-summary">
+                    <span>Credits: {result.totalCredits} | Earned: {result.earnedCredits} | CGPA Divisor: {cgpaMode === 'annexure-backlog' ? result.cgpaCredits : result.totalCredits}</span>
                   </div>
-                )}
-              </article>
-            )
+
+                  <div className="table-wrapper">
+                    <table>
+                      <thead>
+                        {editingSemIndex === index ? (
+                          <tr>
+                            <th></th>
+                            <th>Code</th>
+                            <th>Subject</th>
+                            <th>Total</th>
+                            <th>Credits</th>
+                            <th>Grade</th>
+                          </tr>
+                        ) : (
+                          <tr>
+                            <th>Code</th>
+                            <th>Subject</th>
+                            <th>Total</th>
+                            <th>Credits</th>
+                            <th>Grade</th>
+                          </tr>
+                        )}
+                      </thead>
+                      <tbody>
+                        {editingSemIndex === index ? (
+                          result.subjects.map((subject, subIdx) => (
+                            <tr key={subIdx}>
+                              <td>
+                                <button
+                                  type="button"
+                                  className="delete-row-btn"
+                                  onClick={() => deleteSemesterSubject(index, subIdx)}
+                                >
+                                  ×
+                                </button>
+                              </td>
+                              <td>
+                                <input
+                                  type="text"
+                                  value={subject.code}
+                                  onChange={(e) => updateSemesterSubject(index, subIdx, 'code', e.target.value)}
+                                  className="code-input"
+                                  placeholder="Code"
+                                />
+                              </td>
+                              <td>
+                                <input
+                                  type="text"
+                                  value={subject.name}
+                                  onChange={(e) => updateSemesterSubject(index, subIdx, 'name', e.target.value)}
+                                  className="name-input"
+                                  placeholder="Subject Name"
+                                />
+                              </td>
+                              <td>
+                                <input
+                                  type="number"
+                                  value={subject.total ?? 0}
+                                  onChange={(e) => updateSemesterSubject(index, subIdx, 'total', Number(e.target.value))}
+                                  min="0"
+                                  max="100"
+                                  className="marks-input"
+                                />
+                              </td>
+                              <td>
+                                <input
+                                  type="number"
+                                  value={subject.credits}
+                                  onChange={(e) => updateSemesterSubject(index, subIdx, 'credits', Number(e.target.value))}
+                                  min="1"
+                                  max="10"
+                                  className="credits-input"
+                                />
+                              </td>
+                              <td>
+                                <select
+                                  value={subject.grade}
+                                  onChange={(e) => updateSemesterSubject(index, subIdx, 'grade', e.target.value)}
+                                  className="grade-select"
+                                >
+                                  {Object.keys(selectedScheme.gradePoints).map((g) => (
+                                    <option key={g} value={g}>
+                                      {g}
+                                    </option>
+                                  ))}
+                                </select>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          result.subjectsWithRecalc.map((subject, subIdx) => (
+                            <tr key={subject.code || subIdx} className={subject.isRecalculated ? 'recalculated-row' : ''}>
+                              <td>{subject.code}</td>
+                              <td>{subject.name}</td>
+                              <td>{subject.total ?? '--'}</td>
+                              <td>{subject.credits}</td>
+                              <td className="grade-cell">
+                                {subject.isRecalculated ? (
+                                  <>
+                                    <span className="original-grade strikes">{subject.grade}</span>
+                                    <span className="arrow-sep"> ➔ </span>
+                                    <span className="new-grade">{subject.recalculatedGrade}</span>
+                                  </>
+                                ) : (
+                                  subject.grade
+                                )}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {editingSemIndex === index && (
+                    <div className="semester-card-edit-footer">
+                      <button
+                        type="button"
+                        className="add-row-btn"
+                        onClick={() => addSemesterSubject(index)}
+                      >
+                        + Add Subject Row
+                      </button>
+                    </div>
+                  )}
+
+                  {result.recalculations.length > 0 && editingSemIndex !== index && (
+                    <div className="recalc-comments-box">
+                      {result.recalculations.map((recalc) => (
+                        <div key={recalc.code} className="recalc-comment">
+                          💡 <strong>{recalc.code}</strong> recalculated based on you passed it in {recalc.passedSem}{getOrdinalSuffix(recalc.passedSem)} sem
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </article>
+              )
           })}
           </div>
         )}
