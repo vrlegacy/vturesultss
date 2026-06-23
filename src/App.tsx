@@ -95,7 +95,7 @@ const schemes: Scheme[] = [
 
 
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.0.227/legacy/build/pdf.worker.min.mjs'
+// pdfjsLib.GlobalWorkerOptions.workerSrc will be initialized dynamically via a Blob URL inside handleFileUpload
 
 function formatGpa(value: number | null | undefined): string {
   if (value === null || value === undefined || isNaN(value)) {
@@ -814,6 +814,20 @@ function App() {
       for (const file of files) {
         if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
           setStatus(`Loading PDF: ${file.name}...`)
+          const workerCdnUrl = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.0.227/legacy/build/pdf.worker.min.mjs'
+          if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+            try {
+              setStatus('Initializing PDF worker...')
+              const response = await fetch(workerCdnUrl)
+              if (!response.ok) throw new Error(`HTTP ${response.status}`)
+              const blob = await response.blob()
+              pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(blob)
+            } catch (err) {
+              console.warn("Failed to create blob worker, falling back to CDN string:", err)
+              pdfjsLib.GlobalWorkerOptions.workerSrc = workerCdnUrl
+            }
+          }
+
           const buffer = await file.arrayBuffer()
           const pdf = await pdfjsLib.getDocument({
             data: buffer,
